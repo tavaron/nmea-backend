@@ -1,16 +1,30 @@
 package server
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+
+	"../Error"
+	"../mongoReaders"
+)
 
 func serveRMC(r *gin.Engine) {
 	r.GET("/rmc", gin.HandlerFunc(provideRMC))
 }
 
 func provideRMC(c *gin.Context) {
-	c.JSON(200, gin.H{
-		"lat": 		0.1,
-		"latDir": 	"E",
-		"lon": 		0.1,
-		"lonDir": 	"N",
-	})
+	data := mongoReaders.ReadLastRMC(db)
+	if data.Id == 0 {
+		errorChan <- Error.New(Error.High, "received invalid PAD data")
+		c.JSON(404, nil)
+	} else {
+		c.JSON(200, gin.H{
+			"time":               data.Id,
+			"devID":              data.Data[0].DeviceID,
+			"latitude":           data.Data[0].Latitude,
+			"longitude":          data.Data[0].Longitude,
+			"speed":              data.Data[0].Speed,
+			"true_course":        data.Data[0].TrueCourse,
+			"magnetic_variation": data.Data[0].MagneticVariation,
+		})
+	}
 }
