@@ -7,24 +7,36 @@ import (
 	"../mongoReaders"
 )
 
-func serveRMC(r *gin.Engine) {
-	r.GET("/rmc", gin.HandlerFunc(provideRMC))
+func routeRMC(router *gin.Engine) {
+	router.GET("/rmc/:amount/:interval", gin.HandlerFunc(serveRMC))
+	router.GET("/rmc/:amount", gin.HandlerFunc(serveRMC))
+	router.GET("/rmc", gin.HandlerFunc(serveRMC))
+
 }
 
-func provideRMC(c *gin.Context) {
-	data := mongoReaders.ReadLastRMC(db)
-	if data.Id == 0 {
-		errorChan <- Error.New(Error.High, "received invalid PAD data")
-		c.JSON(404, nil)
-	} else {
-		c.JSON(200, gin.H{
-			"time":               data.Id,
-			"devID":              data.Data[0].DeviceID,
-			"latitude":           data.Data[0].Latitude,
-			"longitude":          data.Data[0].Longitude,
-			"speed":              data.Data[0].Speed,
-			"true_course":        data.Data[0].TrueCourse,
-			"magnetic_variation": data.Data[0].MagneticVariation,
-		})
+func convertRMC(rmc mongoReaders.ResultRMC) gin.H {
+	return gin.H{
+		"time":               rmc.Id,
+		"devID":              rmc.Data[0].DeviceID,
+		"latitude":           rmc.Data[0].Latitude,
+		"longitude":          rmc.Data[0].Longitude,
+		"speed":              rmc.Data[0].Speed,
+		"true_course":        rmc.Data[0].TrueCourse,
+		"magnetic_variation": rmc.Data[0].MagneticVariation,
 	}
+}
+
+func serveRMC(c *gin.Context) {
+	data := mongoReaders.ReadRMC(db, getAmount(c), getInterval(c))
+	if data == nil {
+		errorChan <- Error.New(Error.Warning, c.ClientIP()+"no RMC data received from MongoDB")
+		c.JSON(500, "no RMC data received from MongoDB")
+		return
+	}
+
+	var send []gin.H
+	for _, rmc := range data {
+		send = append(send, convertRMC(rmc))
+	}
+	c.JSON(200, send)
 }

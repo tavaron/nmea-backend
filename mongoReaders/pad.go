@@ -27,27 +27,47 @@ type ResultPAD struct {
 	Data []PAD `bson:"data"`
 }
 
-func ReadLastPAD(db *mongo.Database) ResultPAD {
+func ReadPAD(db *mongo.Database, amount int64, interval int64) []ResultPAD {
 	if db == nil {
 		errorChan <- Error.New(Error.Fatal, "database not connected")
-		return ResultPAD{
-			Id:   0,
-			Data: nil,
-		}
+		return nil
 	}
 
-	coll := db.Collection("PAD")
-	var entry ResultPAD
-	opts := options.FindOne()
-	opts.SetSort(bson.D{{"_id", -1}})
-	err := coll.FindOne(context.TODO(), bson.D{}, opts).Decode(&entry)
+	if amount <= 0 {
+		amount = 1
+	} else if amount > amountLimit {
+		amount = amountLimit
+	}
 
+	if interval <= 0 {
+		interval = 1
+	}
+
+	opts := options.Find()
+	opts.SetLimit(amount * interval)
+	opts.SetSort(bson.D{{"_id", -1}})
+
+	cur, err := db.Collection("PAD").Find(context.TODO(), bson.D{}, opts)
 	if err != nil {
 		errorChan <- Error.Err(Error.Low, err)
-		return ResultPAD{
-			Id:   0,
-			Data: nil,
-		}
+		return nil
 	}
-	return entry
+	defer cur.Close(context.TODO())
+
+	var result []ResultPAD
+	var i int64 = 0
+	for cur.Next(context.TODO()) {
+		if i%interval == 0 {
+			var pad ResultPAD
+			err := cur.Decode(&pad)
+			if err != nil {
+				errorChan <- Error.Err(Error.Low, err)
+			} else {
+				result = append(result, pad)
+			}
+		}
+		i++
+	}
+
+	return result
 }

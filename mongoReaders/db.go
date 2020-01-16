@@ -18,6 +18,8 @@ type dbConfig struct {
 
 var errorChan chan<- Error.Error
 
+const amountLimit int64 = 50000
+
 func MongoDB(ch chan<- Error.Error) *mongo.Database {
 	errorChan = ch
 	config := dbConfig{
